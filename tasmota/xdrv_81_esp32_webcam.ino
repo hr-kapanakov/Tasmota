@@ -60,6 +60,7 @@
  * WcBrightness = Set picture Brightness -2 ... +2
  * WcContrast   = Set picture Contrast -2 ... +2
  * WcInit       = Init Camera Interface
+ * WcDeinit     = Deinit Camera Interface
  * WcRtsp       = Control RTSP Server, 0=disable, 1=enable (forces restart) (if defined ENABLE_RTSPSERVER)
  *
  * Only boards with PSRAM should be used. To enable PSRAM board should be se set to esp32cam in common32 of platform_override.ini
@@ -994,11 +995,12 @@ void WcInit(void) {
 #define D_CMND_WC_BRIGHTNESS "Brightness"
 #define D_CMND_WC_CONTRAST "Contrast"
 #define D_CMND_WC_INIT "Init"
+#define D_CMND_WC_DEINIT "Deinit"
 #define D_CMND_RTSP "Rtsp"
 
 const char kWCCommands[] PROGMEM =  D_PRFX_WEBCAM "|"  // Prefix
   "|" D_CMND_WC_STREAM "|" D_CMND_WC_RESOLUTION "|" D_CMND_WC_MIRROR "|" D_CMND_WC_FLIP "|"
-  D_CMND_WC_SATURATION "|" D_CMND_WC_BRIGHTNESS "|" D_CMND_WC_CONTRAST "|" D_CMND_WC_INIT
+  D_CMND_WC_SATURATION "|" D_CMND_WC_BRIGHTNESS "|" D_CMND_WC_CONTRAST "|" D_CMND_WC_INIT "|" D_CMND_WC_DEINIT
 #ifdef ENABLE_RTSPSERVER
   "|" D_CMND_RTSP
 #endif // ENABLE_RTSPSERVER
@@ -1006,7 +1008,7 @@ const char kWCCommands[] PROGMEM =  D_PRFX_WEBCAM "|"  // Prefix
 
 void (* const WCCommand[])(void) PROGMEM = {
   &CmndWebcam, &CmndWebcamStream, &CmndWebcamResolution, &CmndWebcamMirror, &CmndWebcamFlip,
-  &CmndWebcamSaturation, &CmndWebcamBrightness, &CmndWebcamContrast, &CmndWebcamInit
+  &CmndWebcamSaturation, &CmndWebcamBrightness, &CmndWebcamContrast, &CmndWebcamInit, &CmndWebcamDeinit
 #ifdef ENABLE_RTSPSERVER
   , &CmndWebRtsp
 #endif // ENABLE_RTSPSERVER
@@ -1087,6 +1089,15 @@ void CmndWebcamContrast(void) {
 
 void CmndWebcamInit(void) {
   WcInterruptControl();
+  ResponseCmndDone();
+}
+
+void CmndWebcamDeinit(void) {
+  WcSetStreamserver(0);
+  WcSetup(-1);
+#ifdef ENABLE_RTSPSERVER
+  Wc.rtsp_start = 0;
+#endif // ENABLE_RTSPSERVER
   ResponseCmndDone();
 }
 
