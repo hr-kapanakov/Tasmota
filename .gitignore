@@ -33,3 +33,5 @@ platformio_tasmota_cenv.ini
 .vscode/launch.json
 *.bak
 *.code-workspace
+
+.vs

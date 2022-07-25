@@ -594,7 +594,7 @@ void ResponseAppendFeatures(void)
 #ifdef USE_DYP
     feature6 |= 0x00400000;  // xsns_76_dyp.ino
 #endif
-#ifdef USE_I2S_AUDIO
+#if defined(USE_I2S_AUDIO) || defined(USE_I2S_AUDIO_STREAM)
     feature6 |= 0x00800000;  // xdrv_42_i2s_audio.ino
 #endif
 #ifdef USE_MLX90640
