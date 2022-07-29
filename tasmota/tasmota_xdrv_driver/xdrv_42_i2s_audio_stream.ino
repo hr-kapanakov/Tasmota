@@ -25,7 +25,7 @@
 const int preallocateBufferSize = 5*1024;
 #endif  // ESP8266
 #ifdef ESP32
-const int preallocateBufferSize = 16*1024;
+const int preallocateBufferSize = 64*1024;
 #endif  // ESP32
 const int preallocateCodecSize = 29192; // MP3 codec max mem needed
 //const int preallocateCodecSize = 85332; // AAC+SBR codec max mem needed
@@ -96,7 +96,7 @@ bool playing;
 void mp3_task(void* arg) {
   while (playing) {
     if (mp3 && mp3->isRunning()) {
-      //AddLog(LOG_LEVEL_DEBUG, PSTR("Stream buffer: %d"), buff->getFillLevel());
+      AddLog(LOG_LEVEL_DEBUG, PSTR("Stream buffer: %d"), buff->getFillLevel());
       if (!mp3->loop()) {
         AddLog(LOG_LEVEL_INFO, PSTR("Stream end"));
         StopPlaying();
@@ -181,6 +181,7 @@ void StopPlaying() {
 
 #ifdef ESP32
   playing = false;
+  delay(100);
 #endif // ESP32
 
   if (mp3) {
