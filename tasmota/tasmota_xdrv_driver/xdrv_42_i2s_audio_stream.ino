@@ -66,7 +66,7 @@ void I2S_Init(void) {
 #endif  // USE_I2S_EXTERNAL_DAC
 
   is2_volume=10;
-  out->SetGain(((float)is2_volume/100.0)*4.0);
+  out->SetGain(((float)is2_volume/256.0)*4.0);
   out->stop();
 
 #ifdef ESP32
@@ -96,7 +96,7 @@ bool playing;
 void mp3_task(void* arg) {
   while (playing) {
     if (mp3 && mp3->isRunning()) {
-      AddLog(LOG_LEVEL_DEBUG, PSTR("Stream buffer: %d"), buff->getFillLevel());
+      //AddLog(LOG_LEVEL_DEBUG, PSTR("Stream buffer: %d"), buff->getFillLevel());
       if (!mp3->loop()) {
         AddLog(LOG_LEVEL_INFO, PSTR("Stream end"));
         StopPlaying();
@@ -239,7 +239,7 @@ void Cmd_Gain(void) {
   if ((XdrvMailbox.payload >= 0) && (XdrvMailbox.payload <= 100)) {
     if (out) {
       is2_volume=XdrvMailbox.payload;
-      out->SetGain(((float)(is2_volume-2)/100.0)*4.0);
+      out->SetGain(((float)(is2_volume-2)/256.0)*4.0);
     }
   }
   ResponseCmndNumber(is2_volume);
