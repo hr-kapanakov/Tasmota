@@ -1,5 +1,5 @@
 
-#ifdef  USE_I2S_AUDIO_STREAM
+#ifdef USE_I2S_AUDIO_STREAM
 /*
 * Default pins:
 * bclkPin = 26;
@@ -44,7 +44,7 @@ void* preallocateBuffer = NULL;
 void* preallocateCodec = NULL;
 
 char title[64];
-//char status[64];
+bool paused = false;
 
 // should be in settings
 uint8_t is2_volume;
@@ -95,23 +95,48 @@ bool playing;
 
 void mp3_task(void* arg) {
   while (playing) {
-    if (mp3 && mp3->isRunning()) {
-      //AddLog(LOG_LEVEL_DEBUG, PSTR("Stream buffer: %d"), buff->getFillLevel());
-      if (!mp3->loop()) {
-        AddLog(LOG_LEVEL_INFO, PSTR("Stream end"));
-        StopPlaying();
-      }
-      delay(1);
-    }
-    else {
+    if (!play()) {
       break;
     }
+    delay(1);
   }
+  if (mp3 && mp3->isRunning()) // it is not the ended
+    out->flush();
 
   vTaskDelete(mp3_task_h);
   mp3_task_h = nullptr;
 }
 #endif  // ESP32
+
+const int lowBufferSize = 2 * 1024;
+bool filling = false;
+
+bool play() {
+  if (mp3 && mp3->isRunning()) {
+    AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("buffer level: %d, size: %d, pos: %d"), buff->getFillLevel(), buff->getSize(), buff->getPos());
+
+    if (buff->getFillLevel() < lowBufferSize && buff->getSize() > buff->getPos()) // low buffer, but it is not the end
+      filling = true;
+    if (buff->getFillLevel() > 5 * lowBufferSize) // if it's filled enough
+      filling = false;
+    if (filling) {
+      // try to catch up filling the buffer
+      AddLog(LOG_LEVEL_DEBUG, PSTR("Low stream buffer level: %d/%d"), buff->getFillLevel(), preallocateBufferSize);
+      buff->loop();
+    }
+
+    if (paused || filling) { // paused or filling the buffer
+      // flush the output to stop the glitch noise
+      out->flush();
+    }
+    else if (!mp3->loop()) {
+      AddLog(LOG_LEVEL_INFO, PSTR("Stream end"));
+      StopPlaying();
+    }
+    return true;
+  }
+  return false;
+}
 
 
 void MDCallback(void *cbData, const char *type, bool isUnicode, const char *str) {
@@ -136,8 +161,6 @@ void StatusCallback(void *cbData, int code, const char *string) {
   const char *ptr = reinterpret_cast<const char *>(cbData);
   (void) code;
   (void) ptr;
-  //strncpy_P(status, string, sizeof(status)-1);
-  //status[sizeof(status)-1] = 0;
   char s1[64];
   strncpy_P(s1, string, sizeof(s1));
   s1[sizeof(s1) - 1] = 0;
@@ -164,6 +187,7 @@ void PlayStream(const char *url) {
     AddLog(LOG_LEVEL_DEBUG, PSTR("Play stream: %s"), url);
     strncpy(title, url, sizeof(title));
     title[sizeof(title) - 1] = 0;
+    paused = false;
 
     Response_P(PSTR("{\"Play\":\"%s\"}"), url);
     MqttPublishPrefixTopic_P(STAT, "I2S");
@@ -217,9 +241,9 @@ void I2S_Show(void) {
 #endif  // USE_WEBSERVER
 
 
-const char kI2SAudio_Commands[] PROGMEM = "I2S|Gain|Play";
+const char kI2SAudio_Commands[] PROGMEM = "I2S|Gain|Play|Pause";
 
-void (* const I2SAudio_Command[])(void) PROGMEM = { &Cmd_Gain, &Cmd_Play };
+void (* const I2SAudio_Command[])(void) PROGMEM = { &Cmd_Gain, &Cmd_Play, &Cmd_Pause };
 
 
 void Cmd_Play(void) {
@@ -233,6 +257,17 @@ void Cmd_Play(void) {
   else {
     ResponseCmndChar_P(PSTR("Stopped"));
   }
+}
+
+void Cmd_Pause(void) {
+    if (XdrvMailbox.payload) {
+      paused = true;
+      ResponseCmndChar_P(PSTR("Pause"));
+    }
+    else {
+      paused = false;
+      ResponseCmndChar_P(PSTR("Play"));
+    }
 }
 
 void Cmd_Gain(void) {
@@ -261,11 +296,7 @@ bool Xdrv42(uint8_t function) {
       break;
 #ifdef ESP8266
     case FUNC_EVERY_50_MSECOND:
-      if (mp3 && mp3->isRunning()) {
-        if (!mp3->loop()) {
-          StopPlaying();
-        }
-      }
+        play();
       break;
 #endif  // ESP8266
 #ifdef USE_WEBSERVER
