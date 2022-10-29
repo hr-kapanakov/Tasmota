@@ -1,6 +1,8 @@
 
 #ifdef USE_I2S_AUDIO_STREAM
 /*
+* Should define USE_I2S to be able to custom pins.
+* 
 * Default pins:
 * bclkPin = 26;
 * wclkPin = 25;
@@ -56,6 +58,8 @@ void I2S_Init(void) {
   out = new AudioOutputI2SNoDAC();
   #else
   out = new AudioOutputI2S();
+  if (PinUsed(GPIO_I2S_OUT_CLK) && PinUsed(GPIO_I2S_OUT_SLCT) && PinUsed(GPIO_I2S_OUT_DATA))
+    out->SetPinout(Pin(GPIO_I2S_OUT_CLK), Pin(GPIO_I2S_OUT_SLCT), Pin(GPIO_I2S_OUT_DATA));
   #endif  // USE_I2S_NO_DAC
 #else
   #ifdef USE_I2S_NO_DAC
