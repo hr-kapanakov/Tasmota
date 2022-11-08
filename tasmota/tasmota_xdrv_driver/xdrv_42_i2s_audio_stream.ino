@@ -45,7 +45,9 @@ AudioFileSourceBuffer* buff = NULL;
 void* preallocateBuffer = NULL;
 void* preallocateCodec = NULL;
 
-char title[64];
+char title[256];
+uint8_t pos = 0;
+uint8_t bufLvl = 0;
 bool paused = false;
 
 // should be in settings
@@ -118,6 +120,9 @@ bool filling = false;
 bool play() {
   if (mp3 && mp3->isRunning()) {
     AddLog(LOG_LEVEL_DEBUG_MORE, PSTR("buffer level: %d, size: %d, pos: %d"), buff->getFillLevel(), buff->getSize(), buff->getPos());
+
+    pos = 100 * buff->getPos() / buff->getSize();
+    bufLvl = 100 * buff->getFillLevel() / preallocateBufferSize;
 
     if (buff->getFillLevel() < lowBufferSize && buff->getSize() > buff->getPos()) // low buffer, but it is not the end
       filling = true;
@@ -193,7 +198,7 @@ void PlayStream(const char *url) {
     title[sizeof(title) - 1] = 0;
     paused = false;
 
-    Response_P(PSTR("{\"Play\":\"%s\"}"), url);
+    Response_P(PSTR("{\"Play\":\"%s\",\"Paused\":false,\"Position\":0,\"BufferLevel\":0}"), url);
     MqttPublishPrefixTopic_P(STAT, "I2S");
     ResponseClear();
 	
@@ -234,15 +239,35 @@ void StopPlaying() {
 }
 
 #ifdef USE_WEBSERVER
-const char HTTP_AUDIO_STREAM[] PROGMEM =
+const char HTTP_AUDIO_STREAM_TITLE[] PROGMEM =
    "{s}" "I2S-Title" "{m}%s{e}";
+const char HTTP_AUDIO_STREAM_PAUSED[] PROGMEM =
+   "{s}" "I2S-Paused" "{m}%s{e}";
+const char HTTP_AUDIO_STREAM_POS[] PROGMEM =
+   "{s}" "I2S-Position" "{m}%d{e}";
+const char HTTP_AUDIO_STREAM_BUF_LVL[] PROGMEM =
+   "{s}" "I2S-Buffer-Level" "{m}%d{e}";
 
 void I2S_Show(void) {
-    if (mp3 && mp3->isRunning()) {
-      WSContentSend_PD(HTTP_AUDIO_STREAM, title);
-    }
+  if (mp3 && mp3->isRunning()) {
+    WSContentSend_PD(HTTP_AUDIO_STREAM_TITLE, title);
+    WSContentSend_PD(HTTP_AUDIO_STREAM_PAUSED, paused ? "true" : "false");
+    WSContentSend_PD(HTTP_AUDIO_STREAM_POS, pos);
+    WSContentSend_PD(HTTP_AUDIO_STREAM_BUF_LVL, bufLvl);
+  }
 }
 #endif  // USE_WEBSERVER
+
+unsigned long updateTimer = millis();
+void I2S_Update(void) {
+  // if playing send MQTT update every 5 seconds
+  if (millis() - updateTimer > 5000 && mp3 && mp3->isRunning()) {
+    updateTimer = millis();
+    Response_P(PSTR("{\"Position\":%d,\"BufferLevel\":%d}"), pos, bufLvl);
+    MqttPublishPrefixTopic_P(STAT, "I2S");
+    ResponseClear();
+  }
+}
 
 
 const char kI2SAudio_Commands[] PROGMEM = "I2S|Gain|Play|Pause";
@@ -272,6 +297,10 @@ void Cmd_Pause(void) {
       paused = false;
       ResponseCmndChar_P(PSTR("Play"));
     }
+
+    Response_P(PSTR("{\"Paused\":%s}"), paused ? "true" : "false");
+    MqttPublishPrefixTopic_P(STAT, "I2S");
+    ResponseClear();
 }
 
 void Cmd_Gain(void) {
@@ -297,6 +326,9 @@ bool Xdrv42(uint8_t function) {
       break;
     case FUNC_INIT:
       I2S_Init();
+      break;
+    case FUNC_EVERY_SECOND:
+      I2S_Update();
       break;
 #ifdef ESP8266
     case FUNC_EVERY_50_MSECOND:
